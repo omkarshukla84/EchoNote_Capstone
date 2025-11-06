@@ -1,6 +1,10 @@
 import { useState, useEffect, useRef } from 'react';
-import { Mic, MicOff, Sparkles, Loader2, Copy, Check, Trash2 } from 'lucide-react';
+import { Mic, MicOff, Sparkles, Loader2, Copy, Check, Trash2, LogOut, History } from 'lucide-react';
 import { supabase } from './lib/supabase';
+import { useAuth } from './context/AuthContext';
+import { LoginPage } from './pages/Login';
+import { SignupPage } from './pages/Signup';
+import { HistoryPage } from './pages/History';
 
 interface SpeechRecognitionEvent extends Event {
   results: SpeechRecognitionResultList;
@@ -30,6 +34,9 @@ declare global {
 }
 
 function App() {
+  const { user, isLoading, signOut } = useAuth();
+  const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
+  const [showHistory, setShowHistory] = useState(false);
   const [isListening, setIsListening] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [geminiResponse, setGeminiResponse] = useState('');
@@ -38,6 +45,7 @@ function App() {
   const [copied, setCopied] = useState(false);
   const [geminiApiKey, setGeminiApiKey] = useState('');
   const [customPrompt, setCustomPrompt] = useState('');
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
   const recognitionRef = useRef<SpeechRecognition | null>(null);
 
   useEffect(() => {
@@ -144,6 +152,7 @@ function App() {
       await supabase.from('speech_records').insert({
         transcript,
         gemini_response: generatedText,
+        user_id: user?.id,
       });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -170,6 +179,27 @@ function App() {
     }
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden flex items-center justify-center">
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.05),transparent_50%)]" />
+        <Loader2 className="w-8 h-8 text-blue-400 animate-spin relative z-10" />
+      </div>
+    );
+  }
+
+  if (!user) {
+    return authMode === 'login' ? (
+      <LoginPage onSwitchToSignup={() => setAuthMode('signup')} />
+    ) : (
+      <SignupPage onSwitchToLogin={() => setAuthMode('login')} />
+    );
+  }
+
+  if (showHistory) {
+    return <HistoryPage onBack={() => setShowHistory(false)} />;
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 relative overflow-hidden">
       <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.05),transparent_50%)]" />
@@ -179,13 +209,55 @@ function App() {
       </div>
 
       <div className="relative max-w-7xl mx-auto px-4 py-12">
-        <div className="text-center mb-16 animate-in fade-in duration-700">
-          <h1 className="text-7xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent mb-6 tracking-tight hover:scale-105 transition-transform duration-500 cursor-default bg-[length:200%_auto] animate-[gradient_3s_ease_infinite]">
-            EchoNote
-          </h1>
-          <p className="text-xl text-slate-400 max-w-2xl mx-auto hover:text-slate-300 transition-colors duration-300">
-            Transform your voice into intelligent insights with advanced AI processing
-          </p>
+        <div className="flex items-center justify-between mb-16">
+          <div className="text-center flex-1 animate-in fade-in duration-700">
+            <h1 className="text-7xl font-bold bg-gradient-to-r from-blue-400 via-cyan-400 to-blue-400 bg-clip-text text-transparent mb-6 tracking-tight hover:scale-105 transition-transform duration-500 cursor-default bg-[length:200%_auto] animate-[gradient_3s_ease_infinite]">
+              EchoNote
+            </h1>
+            <p className="text-xl text-slate-400 max-w-2xl mx-auto hover:text-slate-300 transition-colors duration-300">
+              Transform your voice into intelligent insights with advanced AI processing
+            </p>
+          </div>
+
+          <div className="relative">
+            <button
+              onClick={() => setShowProfileMenu(!showProfileMenu)}
+              className="flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-r from-blue-500 to-cyan-500 hover:shadow-lg hover:shadow-blue-500/50 transition-all duration-300 text-white font-semibold"
+            >
+              {user.email?.charAt(0).toUpperCase() || 'U'}
+            </button>
+
+            {showProfileMenu && (
+              <div className="absolute right-0 mt-3 w-56 bg-slate-800/95 backdrop-blur-xl rounded-xl border border-slate-700/50 shadow-2xl overflow-hidden z-50 animate-in fade-in slide-in-from-top-2 duration-200">
+                <div className="px-4 py-3 border-b border-slate-700/50">
+                  <p className="text-sm text-slate-400">Signed in as</p>
+                  <p className="text-slate-200 font-semibold truncate">{user.email}</p>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setShowHistory(true);
+                    setShowProfileMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-slate-300 hover:bg-slate-700/50 hover:text-white transition-all duration-200"
+                >
+                  <History className="w-4 h-4" />
+                  View History
+                </button>
+
+                <button
+                  onClick={async () => {
+                    await signOut();
+                    setShowProfileMenu(false);
+                  }}
+                  className="w-full flex items-center gap-3 px-4 py-3 text-red-400 hover:bg-red-500/10 transition-all duration-200 border-t border-slate-700/50"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sign Out
+                </button>
+              </div>
+            )}
+          </div>
         </div>
 
         <div className="mb-8 bg-slate-800/50 backdrop-blur-xl rounded-2xl border border-slate-700/50 shadow-2xl p-6 hover:border-blue-500/30 hover:shadow-blue-500/10 transition-all duration-500 hover:scale-[1.01]">
